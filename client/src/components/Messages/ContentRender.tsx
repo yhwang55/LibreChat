@@ -5,6 +5,10 @@ import { Constants } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { TMessageProps, TMessageIcon, TMessageChatContext } from '~/common';
 import {
+  ProductQuestionProvider,
+  useProductQuestionResolver,
+} from '~/components/Chat/Messages/Content/ProductCards';
+import {
   areMessageFieldsEqual,
   cn,
   getHeaderPrefixForScreenReader,
@@ -148,6 +152,7 @@ const ContentRender = memo(function ContentRender({
   );
 
   const { hasParallelContent } = useContentMetadata(msg);
+  const resolveProductQuestion = useProductQuestionResolver(msg);
 
   if (!msg) {
     return null;
@@ -211,25 +216,31 @@ const ContentRender = memo(function ContentRender({
         </SubRow>
       }
     >
-      <ContentParts
-        edit={edit}
-        isLast={isLast}
-        enterEdit={enterEdit}
-        siblingIdx={siblingIdx}
-        messageId={msg.messageId}
-        attachments={attachments}
-        searchResults={searchResults}
-        manualSkills={msg.manualSkills}
-        authorHeader={authorHeader}
-        setSiblingIdx={setSiblingIdx}
-        isLatestMessage={isLatestMessage}
-        isSubmitting={isSubmitting}
-        isCreatedByUser={msg.isCreatedByUser}
-        createdAt={msg.createdAt ?? msg.clientTimestamp}
-        showThinking={showThinking}
-        conversationId={conversation?.conversationId}
-        content={msg.content as Array<TMessageContentParts | undefined>}
-      />
+      {/** Product cards weigh the question and the reply together, and only a message
+       *   row knows which question produced this turn. `ContentParts` also serves
+       *   surfaces with no question behind them (subagent panels, search), so the
+       *   value is supplied here rather than resolved inside the card. */}
+      <ProductQuestionProvider value={resolveProductQuestion}>
+        <ContentParts
+          edit={edit}
+          isLast={isLast}
+          enterEdit={enterEdit}
+          siblingIdx={siblingIdx}
+          messageId={msg.messageId}
+          attachments={attachments}
+          searchResults={searchResults}
+          manualSkills={msg.manualSkills}
+          authorHeader={authorHeader}
+          setSiblingIdx={setSiblingIdx}
+          isLatestMessage={isLatestMessage}
+          isSubmitting={isSubmitting}
+          isCreatedByUser={msg.isCreatedByUser}
+          createdAt={msg.createdAt ?? msg.clientTimestamp}
+          showThinking={showThinking}
+          conversationId={conversation?.conversationId}
+          content={msg.content as Array<TMessageContentParts | undefined>}
+        />
+      </ProductQuestionProvider>
       {/** A turn that ran out of agent steps is incomplete, not broken. Rendered
        *   here rather than inside `ContentParts` because it is a message-level
        *   outcome, and `ContentParts` also serves surfaces (subagent panels,

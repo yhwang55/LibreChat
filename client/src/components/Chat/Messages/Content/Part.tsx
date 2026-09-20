@@ -32,6 +32,7 @@ import { isBashProgrammaticToolCall } from './routing';
 import { ErrorMessage } from './MessageContent';
 import AskUserQuestion from './AskUserQuestion';
 import RetrievalCall from './RetrievalCall';
+import ProductCards from './ProductCards';
 import ToolApproval from './ToolApproval';
 import AgentHandoff from './AgentHandoff';
 import CodeAnalyze from './CodeAnalyze';
@@ -139,9 +140,12 @@ const Part = memo(function Part({
       }
     }
     return (
-      <Container>
-        <Text text={text} isCreatedByUser={isCreatedByUser} showCursor={showCursor} />
-      </Container>
+      <>
+        <Container>
+          <Text text={text} isCreatedByUser={isCreatedByUser} showCursor={showCursor} />
+        </Container>
+        {!isCreatedByUser && !(showCursor === true && isSubmitting) && <ProductCards text={text} />}
+      </>
     );
   } else if (part.type === ContentTypes.THINK) {
     const reasoning = typeof part.think === 'string' ? part.think : part.think?.value;
