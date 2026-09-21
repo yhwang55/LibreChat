@@ -1,0 +1,138 @@
+# Render Blueprint — LibreChat on Render + MongoDB Atlas
+#
+# Uses the repository's existing Dockerfile rather than Render's native Node
+# runtime. The Dockerfile pins Node 24.16.0 and runs `npm run frontend`, the
+# sequential build; reproducing that as a Render build command means guessing a
+# Node version and hoping the turbo build behaves the same in CI.
+#
+# Secrets are declared with `sync: false`: Render prompts for them on first
+# deploy and never stores them in this file. Do not move real values here —
+# this file is committed.
+#
+# Before deploying, read the "Deploying" notes at the bottom of this file.
+
+services:
+  - type: web
+    name: librechat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard # see the memory note below; free/starter will likely OOM during the client build
+    region: oregon
+    branch: dev
+    healthCheckPath: /health
+
+    envVars:
+      # --- required for Render to reach the process -------------------------
+      # The server defaults to localhost, which Render cannot route to.
+      - key: HOST
+        value: 0.0.0.0
+      # PORT is injected by Render. The server reads it and falls back to 3080.
+
+      # --- database ---------------------------------------------------------
+      # MongoDB Atlas SRV string, including the database name:
+      #   mongodb+srv://USER:PASS@cluster.xxxxx.mongodb.net/LibreChat?retryWrites=true&w=majority
+      - key: MONGO_URI
+        sync: false
+
+      # --- secrets that MUST be fixed and stable ----------------------------
+      # Blank values make LibreChat generate temporary ones into .env.temp.
+      # Render's filesystem is ephemeral, so that file is lost on every deploy:
+      # sessions would be invalidated and stored credentials made unreadable.
+      # Generate once, then paste into the Render dashboard.
+      - key: CREDS_KEY
+        sync: false
+      - key: CREDS_IV
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+
+      # --- public URLs ------------------------------------------------------
+      # Set both to the service's own https URL after the first deploy
+      # (https://<service>.onrender.com, or your custom domain).
+      - key: DOMAIN_CLIENT
+        sync: false
+      - key: DOMAIN_SERVER
+        sync: false
+
+      # --- model providers --------------------------------------------------
+      # Only the ones you actually use need a value.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_KEY
+        sync: false
+
+      # --- Product Cards (this fork) ---------------------------------------
+      # Shopping search stays off until SERPAPI_KEY is set.
+      - key: SERPAPI_KEY
+        sync: false
+      - key: OPENAI_KEYWORD_MODEL
+        value: gpt-4o-mini
+      # Fallback market for when a question's language cannot be read.
+      # Korean questions auto-select the Korean locale regardless of this.
+      - key: PRODUCT_SEARCH_MARKET
+        value: us
+
+      # --- behaviour --------------------------------------------------------
+      - key: NODE_ENV
+        value: production
+      # Render terminates TLS at its proxy; without this, secure cookies and
+      # rate-limiting by IP misbehave behind the proxy.
+      - key: TRUST_PROXY
+        value: '1'
+      - key: ALLOW_EMAIL_LOGIN
+        value: 'true'
+      # Turn this off once your accounts exist, so the instance is not open.
+      - key: ALLOW_REGISTRATION
+        value: 'true'
+      - key: ALLOW_SOCIAL_LOGIN
+        value: 'false'
+      - key: ALLOW_PASSWORD_RESET
+        value: 'false'
+      # No email service is configured, so unverified accounts could not sign
+      # in at all without this.
+      - key: ALLOW_UNVERIFIED_EMAIL_LOGIN
+        value: 'true'
+      - key: APP_TITLE
+        value: LibreChat
+      - key: NO_INDEX
+        value: 'true'
+
+      # --- logging ----------------------------------------------------------
+      # Render captures stdout. Writing logs to the container filesystem only
+      # fills an ephemeral disk that nothing reads.
+      - key: LOG_TO_FILE
+        value: 'false'
+      - key: CONSOLE_JSON
+        value: 'false'
+      - key: DEBUG_LOGGING
+        value: 'false'
+
+      # --- disabled subsystems ---------------------------------------------
+      # MeiliSearch is a separate service; leave search off unless you run one.
+      - key: SEARCH
+        value: 'false'
+# Deploying
+# ---------
+# 1. Memory. The Dockerfile builds the React client with a 6 GB heap ceiling.
+#    That is a ceiling rather than a requirement, but a Vite build of this size
+#    commonly needs more than the 512 MB that Render's free and starter
+#    instances provide, so `plan: standard` is the starting point here. If the
+#    build is killed, raise the plan rather than lowering the ceiling — a
+#    smaller heap makes the build fail sooner, not succeed.
+#
+# 2. Uploads are ephemeral. LibreChat writes user uploads under /app/uploads,
+#    which is lost on every deploy and restart. Attach a Render disk mounted
+#    there, or configure S3/Azure/Firebase storage, before anyone relies on
+#    file uploads.
+#
+# 3. Atlas network access. Render egress IPs are not static on lower plans.
+#    Either allow 0.0.0.0/0 in Atlas (relying on the SRV credentials) or use a
+#    plan with static outbound IPs and allowlist those.
+#
+# 4. First deploy order. DOMAIN_CLIENT and DOMAIN_SERVER need the service URL,
+#    which does not exist until the service is created. Deploy once, copy the
+#    URL, set both, then redeploy.
