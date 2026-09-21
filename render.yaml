@@ -18,7 +18,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: standard # see the memory note below; free/starter will likely OOM during the client build
     region: oregon
-    branch: dev
+    # Points at the feature branch on purpose: Product Cards has not merged to
+    # dev yet, and deploying dev would ship upstream LibreChat without it.
+    # Switch to dev once PR #1 lands.
+    branch: feature/product-cards
     healthCheckPath: /health
 
     envVars:
