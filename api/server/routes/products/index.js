@@ -95,11 +95,20 @@ async function analyzeShoppingIntent(text, question, market) {
 /**
  * Google Shopping (SerpApi) 검색
  *
- * SerpApi는 캐시에 없는 검색어를 실시간으로 긁어오기 때문에 첫 호출이 12~30초까지
- * 걸린다. 기존 15초 제한은 새 검색어마다 타임아웃을 내고 빈 배열을 반환해,
- * 카드가 간헐적으로 안 뜨는 원인이었다. 카드는 응답 본문과 별개로 비동기 로드되므로
- * 대기 시간이 채팅을 막지 않는다.
+ * SerpApi는 캐시에 없는 검색어를 실시간으로 긁어오기 때문에 첫 호출이 오래 걸린다.
+ * 한번 조회된 검색어는 이후 수십~수백 ms로 떨어지므로, 느린 쪽은 언제나 "처음 보는
+ * 검색어"다. 같은 질문을 반복 테스트하는 개발 환경은 캐시가 더워져 빨라 보이고,
+ * 실사용은 매번 새 검색어라 느린 쪽에 몰린다.
+ *
+ * 제한값의 이력: 15초 → 35초 → 60초. 15초와 35초 모두 로컬에서 타임아웃이 났고
+ * (2026-09-17 하루에 18건), 그때마다 빈 결과가 되어 카드가 사라졌다. 타임아웃은
+ * 실패로 기록되므로 `reason: search-failed`로 구분된다.
+ *
+ * 카드는 응답 본문과 별개로 비동기 로드되므로 대기가 채팅을 막지는 않지만, 60초는
+ * 사용자가 스켈레톤을 그만큼 오래 본다는 뜻이기도 하다. 더 늘리는 대신 결과를
+ * 캐시하거나 미리 조회하는 쪽이 다음 수순이다.
  */
+const SEARCH_TIMEOUT = 60000;
 async function searchGoogleShopping(query, market) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
@@ -114,7 +123,7 @@ async function searchGoogleShopping(query, market) {
         api_key: apiKey,
         ...marketSearchParams(market),
       },
-      timeout: 35000,
+      timeout: SEARCH_TIMEOUT,
     });
 
     const results = response.data?.shopping_results ?? [];
