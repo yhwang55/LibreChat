@@ -17,6 +17,8 @@ const {
   dedupeProducts,
 } = require('./intent');
 
+const { getCachedProductSearch, setCachedProductSearch } = require('~/models');
+
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 const router = express.Router();
@@ -187,6 +189,36 @@ async function searchNaverShopping(query) {
   }
 }
 
+/**
+ * 시장에 맞는 검색 엔진을 고르고, 그 앞뒤에 캐시를 둔다.
+ *
+ * 같은 검색어를 다시 묻는 일은 흔하다 — 여러 사용자가 같은 질문을 하고, 같은
+ * 사용자가 아코디언을 다시 열기도 한다. 검색 제공자는 처음 보는 검색어에 40초를
+ * 쓰고 호출마다 유료 할당량을 깎으므로, 한 번 받은 결과는 보관해 두고 재사용한다.
+ *
+ * 저장 대상은 성공한 검색뿐이다. 타임아웃 같은 실패를 저장하면 일시적 장애가
+ * 보관 기간 내내 고착된다. 반면 결과 0건은 실패가 아니라 "이 검색어에는 상품이
+ * 없다"는 사실이므로 저장한다 — 국내 유통이 없는 브랜드가 여기 해당하고, 저장해
+ * 두면 그 검색어로 24시간에 한 번만 할당량을 쓴다.
+ */
+async function searchProducts(query, market) {
+  const cached = await getCachedProductSearch(query, market);
+  if (cached) {
+    logger.debug(`[products] cache hit for "${query}" (${market})`);
+    return { status: SearchStatus.Ok, products: cached.results };
+  }
+
+  const found =
+    market === 'naver'
+      ? await searchNaverShopping(query)
+      : await searchGoogleShopping(query, market);
+
+  if (found.status === SearchStatus.Ok) {
+    await setCachedProductSearch(query, market, found.products);
+  }
+  return found;
+}
+
 router.post('/search', requireJwtAuth, async (req, res) => {
   try {
     const { text, market, question } = req.body;
@@ -232,10 +264,7 @@ router.post('/search', requireJwtAuth, async (req, res) => {
       });
     }
 
-    const found =
-      resolvedMarket === 'naver'
-        ? await searchNaverShopping(query)
-        : await searchGoogleShopping(query, resolvedMarket);
+    const found = await searchProducts(query, resolvedMarket);
 
     res.status(200).json({
       ...describeSearchResult(found),
@@ -268,10 +297,7 @@ router.post('/category', requireJwtAuth, async (req, res) => {
       question: query,
       fallback: process.env.PRODUCT_SEARCH_MARKET,
     });
-    const found =
-      resolvedMarket === 'naver'
-        ? await searchNaverShopping(query)
-        : await searchGoogleShopping(query, resolvedMarket);
+    const found = await searchProducts(query, resolvedMarket);
 
     res.status(200).json({
       ...describeSearchResult(found),
