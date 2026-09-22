@@ -3,6 +3,7 @@ import {
   createOpenIDRefreshFlightMethods,
   type OpenIDRefreshFlightMethods,
 } from './openidRefreshFlight';
+import { createProductSearchMethods, type ProductSearchMethods } from './productSearch';
 export {
   createMCPAuthorizationFenceRetryStorage,
   type MCPAuthorizationFenceRetryStorage,
@@ -221,6 +222,7 @@ export type AllMethods = UserMethods &
   TokenMethods &
   RefreshTokenBridgeMethods &
   OpenIDRefreshFlightMethods &
+  ProductSearchMethods &
   RoleMethods &
   KeyMethods &
   FileMethods &
@@ -444,6 +446,7 @@ export function createMethods(
     ...createTokenMethods(mongoose),
     ...createRefreshTokenBridgeMethods(mongoose),
     ...createOpenIDRefreshFlightMethods(mongoose),
+    ...createProductSearchMethods(mongoose),
     ...roleMethods,
     ...createKeyMethods(mongoose),
     ...createFileMethods(mongoose),

@@ -1,3 +1,4 @@
+const products = require('./products');
 const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
 const categories = require('./categories');
@@ -86,4 +87,5 @@ module.exports = {
   categories,
   staticRoute,
   accessPermissions,
+  products,
 };

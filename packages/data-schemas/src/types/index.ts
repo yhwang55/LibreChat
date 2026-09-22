@@ -8,6 +8,7 @@ export * from './user';
 export * from './token';
 export * from './refreshTokenBridge';
 export * from './openidRefreshFlight';
+export * from './productSearch';
 export * from './convo';
 export * from './chatProject';
 export * from './session';
